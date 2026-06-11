@@ -44,7 +44,7 @@ To run Edmond locally on a standard CPU without external API dependencies:
    * **Linux / macOS:** Run `start.sh` in your terminal.
    *(This automatically sets up a `.venv` virtual environment, installs dependencies, and launches the UI).*
 3. **Index documents:**
-   * Populate the `source_docs/` folder with text documents (e.g., files from `synthetic_data` or *övningsplaner*, obs: needs to be `.txt`).
+   * Populate the `source_docs/` folder with text documents and remove `.gitkeep` (e.g., files from `synthetic_data` or *övningsplaner*, obs: needs to be `.txt`).
    * Open the Streamlit admin panel sidebar and click **Rebuild Database Index** to generate vector and keyword databases.
 
 ### Running Evaluations
