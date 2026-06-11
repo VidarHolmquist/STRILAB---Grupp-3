@@ -88,10 +88,10 @@ The testing scripts reside in the `metrics/` folder and calculate metrics agains
 ### Advanced RAG Extensions
 *Goal: Optimize precision, handle complex queries, and eliminate hallucinations.*
 
-* **Stage 1: Pre-Retrieval Optimization**
+* **Pre-Retrieval Optimization**
   * **Query Rewriting / Expansion:** Use a lightweight LLM call to generate search variations or split complex queries into sub-queries.
   * **HyDE (Hypothetical Document Embeddings):** Embed LLM-generated hypothetical responses to improve semantic searches.
-* **Stage 2: Post-Retrieval Filtering & Validation**
+* **Post-Retrieval Filtering & Validation**
   * **Cross-Encoder Reranker:** Integrate `BAAI/bge-reranker` to re-score the top 25 results down to the best 3-5 before feed-forwarding.
   * **Validity Check / Grading Node:** Programmatic LLM grading to check if retrieved contexts contain the answer.
   * **Fallback Loops:** If context grades are low, trigger external search fallback or return a graceful "Information not found".
