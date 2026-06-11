@@ -1,0 +1,16 @@
+# --- Vector Database & Hybrid Search ---
+chromadb>=0.5.0
+snowballstemmer>=2.2.0
+rank-bm25>=0.2.2
+
+# --- Local ML Inference Frameworks ---
+sentence-transformers>=3.0.0
+torch>=2.5.0 --extra-index-url https://download.pytorch.org/whl/cpu
+torchvision --extra-index-url https://download.pytorch.org/whl/cpu
+
+# --- UI ---
+streamlit>=1.35.0
+
+# --- Utilities ---
+numpy>=1.26.0
+typing-extensions>=4.0.0
