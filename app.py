@@ -210,7 +210,7 @@ def rebuild_database():
 # =============================================================================
 with st.sidebar:
     st.image("https://img.icons8.com/nolan/128/binoculars.png", width=80)
-    st.markdown("<h2 style='margin-top:0;'>Edmond Admin</h2>", unsafe_allow_html=True)
+    st.markdown("<h2 style='margin-top:0;'>Admin</h2>", unsafe_allow_html=True)
     st.markdown("Local Hybrid Search (English & Swedish)")
     st.divider()
     
