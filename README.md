@@ -52,7 +52,7 @@ To run locally on a standard CPU without external API dependencies:
      ```
    *(This automatically sets up a `.venv` virtual environment, installs all required dependencies, and launches the Streamlit search UI).*
 3. **Index documents:**
-   * Populate the `source_docs/` folder with text documents and remove `.gitkeep` (Note: files must be in `.txt` format).
+   * Populate the `source_docs/` folder with text documents (Note: files must be in `.txt` format. Do not delete `.gitkeep`, as it is ignored by the engine but keeps the empty folder structure tracked in Git).
    * *Tip: If the folder contains no `.txt` files, the application will automatically generate sample documents for testing.*
    * Open the Streamlit admin panel sidebar and click **Rebuild Database Index** to generate the vector and keyword database collections.
 

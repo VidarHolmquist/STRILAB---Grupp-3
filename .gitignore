@@ -22,3 +22,9 @@ evaluation_results.json
 # --- OS Caches ---
 .DS_Store
 Thumbs.db
+
+# --- Source Documents ---
+# Ignore the contents of the source_docs directory, but keep the directory itself
+source_docs/*
+!source_docs/.gitkeep
+
