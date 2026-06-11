@@ -35,16 +35,26 @@ To run locally on a standard CPU without external API dependencies:
 
 ### Initializing the Repository
 1. **Pull the code:**
+   Clone the repository and navigate into the project directory:
    ```bash
-   git clone https://github.com/VidarHolmquist/STRILAB---Grupp-3.git 
+   git clone https://github.com/VidarHolmquist/STRILAB---Grupp-3.git
+   cd STRILAB---Grupp-3
    ```
 2. **Start the application:**
-   * **Windows:** Double-click or run `start.bat` in your terminal.
-   * **Linux / macOS:** Run `start.sh` in your terminal.
-   *(This automatically sets up a `.venv` virtual environment, installs dependencies, and launches the UI).*
+   * **Windows:** Double-click `start.bat` in File Explorer, or run it in your terminal:
+     ```cmd
+     .\start.bat
+     ```
+   * **Linux / macOS:** Make the script executable and run it in your terminal:
+     ```bash
+     chmod +x start.sh
+     ./start.sh
+     ```
+   *(This automatically sets up a `.venv` virtual environment, installs all required dependencies, and launches the Streamlit search UI).*
 3. **Index documents:**
-   * Populate the `source_docs/` folder with text documents and remove `.gitkeep` (e.g., files from `synthetic_data` or *övningsplaner*, obs: needs to be `.txt`).
-   * Open the Streamlit admin panel sidebar and click **Rebuild Database Index** to generate vector and keyword databases.
+   * Populate the `source_docs/` folder with text documents and remove `.gitkeep` (Note: files must be in `.txt` format).
+   * *Tip: If the folder contains no `.txt` files, the application will automatically generate sample documents for testing.*
+   * Open the Streamlit admin panel sidebar and click **Rebuild Database Index** to generate the vector and keyword database collections.
 
 ### Running Evaluations
 * **To evaluate retrieval performance:**
