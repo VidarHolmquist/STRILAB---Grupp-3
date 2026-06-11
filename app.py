@@ -9,7 +9,7 @@ from retriever import LocalBilingualRetriever
 # 1. UI Page Setup
 # =============================================================================
 st.set_page_config(
-    page_title="Edmond - Local Hybrid Search",
+    page_title="Local Hybrid Search",
     page_icon="🔍",
     layout="wide"
 )
