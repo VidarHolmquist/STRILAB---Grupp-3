@@ -1,0 +1,24 @@
+# --- Database Storage ---
+# This ignores the local ChromaDB database folder. 
+# It keeps your repository lightweight and fast to clone.
+local_chroma_db/
+
+# --- Virtual Environments ---
+# Ignores the local Python packages installed in the virtual environment.
+.venv/
+venv/
+ENV/
+
+# --- Python System Caches ---
+# Ignores compiled python files.
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# --- Generated Evaluation Results ---
+evaluation_results.json
+
+# --- OS Caches ---
+.DS_Store
+Thumbs.db
