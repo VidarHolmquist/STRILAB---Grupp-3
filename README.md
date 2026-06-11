@@ -36,8 +36,7 @@ To run locally on a standard CPU without external API dependencies:
 ### Initializing the Repository
 1. **Pull the code:**
    ```bash
-   git fetch origin
-   git checkout <branch-or-pr-name>
+   git clone https://github.com/VidarHolmquist/STRILAB---Grupp-3.git 
    ```
 2. **Start the application:**
    * **Windows:** Double-click or run `start.bat` in your terminal.
