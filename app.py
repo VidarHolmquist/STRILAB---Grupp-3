@@ -1,7 +1,6 @@
 import os
 import html
 import re
-# pyrefly: ignore [missing-import]
 import streamlit as st
 from retriever import LocalBilingualRetriever
 
