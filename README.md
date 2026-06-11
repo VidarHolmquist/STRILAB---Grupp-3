@@ -3,7 +3,7 @@
 
 ## System Architecture & Models
 
-To run Edmond locally on a standard CPU without external API dependencies:
+To run locally on a standard CPU without external API dependencies:
 
 | Component | Model Name | Size | Purpose |
 | :--- | :--- | :---: | :--- |
