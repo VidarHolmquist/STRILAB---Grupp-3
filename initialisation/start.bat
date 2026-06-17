@@ -1,8 +1,11 @@
 @echo off
 setlocal enabledelayedexpansion
 
+rem Change directory to project root (parent of script directory)
+cd /d "%~dp0\.."
+
 echo ===================================================
-echo 🔍 Project Edmond: Seamless Local Setup & Launch
+echo 🔍 Edmond: Seamless Local Setup & Launch
 echo ===================================================
 echo.
 
@@ -36,7 +39,7 @@ call .venv\Scripts\activate
 echo.
 echo 📥 Checking and installing Python dependencies...
 python -m pip install --upgrade pip
-pip install -r requirements.txt
+pip install -r initialisation\requirements.txt
 if errorlevel 1 (
     echo ❌ ERROR: Failed to install python packages from requirements.txt.
     pause
@@ -46,6 +49,7 @@ echo ✅ All dependencies verified/installed.
 
 echo.
 echo 🚀 Launching Streamlit Search UI...
-streamlit run app.py
+set PYTHONPATH=.
+streamlit run frontend\app.py
 
 pause

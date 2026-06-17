@@ -1,0 +1,1 @@
+from backend.logic import LocalBilingualRetriever

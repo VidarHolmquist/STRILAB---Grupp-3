@@ -2,7 +2,7 @@ import os
 import html
 import re
 import streamlit as st
-from retriever import LocalBilingualRetriever
+from backend import LocalBilingualRetriever
 
 # =============================================================================
 # 1. UI Page Setup

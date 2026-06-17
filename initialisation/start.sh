@@ -3,8 +3,11 @@
 # Exit immediately if a command exits with a non-zero status
 set -e
 
+# Change directory to project root (parent of script directory)
+cd "$(dirname "$0")/.."
+
 echo "==================================================="
-echo "🔍 Project Edmond: Seamless Local Setup & Launch"
+echo "🔍 Edmond: Seamless Local Setup & Launch"
 echo "==================================================="
 echo
 
@@ -31,9 +34,10 @@ source .venv/bin/activate
 echo
 echo "📥 Checking and installing Python dependencies..."
 python3 -m pip install --upgrade pip
-pip install -r requirements.txt
+pip install -r initialisation/requirements.txt
 echo "✅ All dependencies verified/installed."
 
 echo
 echo "🚀 Launching Streamlit Search UI..."
-streamlit run app.py
+export PYTHONPATH=.
+streamlit run frontend/app.py

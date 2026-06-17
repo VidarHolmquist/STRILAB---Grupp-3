@@ -4,6 +4,7 @@ import math
 import json
 from sentence_transformers import SentenceTransformer
 from snowballstemmer import stemmer
+from backend.database import QdrantDatabaseManager
 
 def tokenize_and_stem(text: str) -> list[str]:
     """
@@ -149,20 +150,6 @@ class CustomBM25Vectorizer:
         self.avgdl = state["avgdl"]
 
 
-class QdrantCollectionWrapper:
-    """Provides compatibility wrapper for app.py that expects Chroma's collection.count() API."""
-    def __init__(self, client, collection_name):
-        self.client = client
-        self.collection_name = collection_name
-        
-    def count(self) -> int:
-        try:
-            count = self.client.get_collection(self.collection_name).points_count
-            return count if count is not None else 0
-        except Exception:
-            return 0
-
-
 class LocalBilingualRetriever:
     """
     A modular hybrid retriever that combines dense semantic search (E5 vectors via Qdrant)
@@ -171,12 +158,13 @@ class LocalBilingualRetriever:
     """
     def __init__(self, db_path="./local_qdrant_db", collection_name="bilingual_rag"):
         """Initializes database, embedding function, and registers runtime state."""
-        from qdrant_client import QdrantClient
-        from qdrant_client.models import VectorParams, Distance, SparseVectorParams, SparseIndexParams
-        
         self.db_path = db_path
         self.collection_name = collection_name
-        self.client = QdrantClient(path=db_path)
+        self.db = QdrantDatabaseManager(db_path=db_path, collection_name=collection_name)
+        
+        # Expose client and collection properties for backwards compatibility
+        self.client = self.db.client
+        self.collection = self.db.collection
         
         # Load local bilingual E5 embedding function
         self.model = SentenceTransformer("intfloat/multilingual-e5-small", device="cpu")
@@ -184,35 +172,6 @@ class LocalBilingualRetriever:
         # Setup BM25 vectorizer configuration
         self.bm25_vectorizer = CustomBM25Vectorizer()
         self.bm25_state_path = os.path.join(db_path, "bm25_state.json")
-        
-        # Verify collection exists with dense and sparse configs
-        collection_exists = False
-        try:
-            self.client.get_collection(collection_name)
-            collection_exists = True
-        except Exception:
-            pass
-            
-        if not collection_exists:
-            self.client.create_collection(
-                collection_name=collection_name,
-                vectors_config={
-                    "dense": VectorParams(
-                        size=384,
-                        distance=Distance.COSINE
-                    )
-                },
-                sparse_vectors_config={
-                    "sparse": SparseVectorParams(
-                        index=SparseIndexParams(
-                            on_disk=False
-                        )
-                    )
-                }
-            )
-            
-        # UI backward compatibility wrapper
-        self.collection = QdrantCollectionWrapper(self.client, collection_name)
         
         # Keyword index tracking variables
         self.indexed_chunks = []
@@ -227,28 +186,11 @@ class LocalBilingualRetriever:
 
     def is_empty(self) -> bool:
         """Returns True if the database contains zero documents."""
-        try:
-            count = self.client.get_collection(self.collection_name).points_count
-            return count is None or count == 0
-        except Exception:
-            return True
+        return self.db.is_empty()
 
     def _get_all_points(self):
         """Fetches all points from Qdrant using pagination."""
-        all_points = []
-        offset = None
-        while True:
-            records, offset = self.client.scroll(
-                collection_name=self.collection_name,
-                limit=1000,
-                with_payload=True,
-                with_vectors=False,
-                offset=offset
-            )
-            all_points.extend(records)
-            if offset is None:
-                break
-        return all_points
+        return self.db.get_all_points()
 
     def _sync_local_lists(self):
         """Syncs local in-memory structures from database contents."""
@@ -295,13 +237,13 @@ class LocalBilingualRetriever:
             indices, values = self.bm25_vectorizer.get_document_sparse_vector(tokenized_doc)
             point_vectors.append(
                 PointVectors(
-                    id=point.id,
-                    vector={
-                        "sparse": SparseVector(
-                            indices=indices,
-                            values=values
-                        )
-                    }
+                      id=point.id,
+                      vector={
+                          "sparse": SparseVector(
+                              indices=indices,
+                              values=values
+                          )
+                      }
                 )
             )
             
@@ -313,39 +255,7 @@ class LocalBilingualRetriever:
 
     def clear_database(self):
         """Deletes all documents inside the collection to allow a fresh ingest."""
-        from qdrant_client.models import Filter
-        
-        try:
-            # Delete all points inside the collection using a match-all filter.
-            # This is extremely robust and avoids file locking issues on Windows.
-            self.client.delete(
-                collection_name=self.collection_name,
-                points_selector=Filter()
-            )
-        except Exception as e:
-            print(f"Note: failed to delete points via selector: {e}")
-            try:
-                self.client.delete_collection(self.collection_name)
-                # Recreate the collection
-                from qdrant_client.models import VectorParams, Distance, SparseVectorParams, SparseIndexParams
-                self.client.create_collection(
-                    collection_name=self.collection_name,
-                    vectors_config={
-                        "dense": VectorParams(
-                            size=384,
-                            distance=Distance.COSINE
-                        )
-                    },
-                    sparse_vectors_config={
-                        "sparse": SparseVectorParams(
-                            index=SparseIndexParams(
-                                on_disk=False
-                            )
-                        )
-                    }
-                )
-            except Exception as ex:
-                print(f"Error recreating collection: {ex}")
+        self.db.clear_database()
         
         # Clear BM25 state
         if os.path.exists(self.bm25_state_path):

@@ -10,14 +10,20 @@ To run locally on a standard CPU without external API dependencies:
 | **Bilingual Embedding** | `intfloat/multilingual-e5-small` | ~100 MB | Local embedding of multi-language docs |
 | **Local LLM (Target)** | `qwen2.5-coder:7b` (via Ollama/Local) | ~4.7 GB | Target generator model for RAG expansion |
 
-*Note: The local embedding model runs natively on CPU using the HuggingFace `sentence-transformers` library.*
+*Note: The local embedding model runs natively using the HuggingFace `sentence-transformers` library.*
 
 ---
 
 ##  Project Structure
 
-* **`app.py`**: Streamlit-based UI to search, preview, and review documents.
-* **`retriever.py`**: Modular hybrid search implementation (E5 Dense Search + BM25 Sparse Search + RRF Fusion).
+* **`frontend/`**:
+  * **`app.py`**: Streamlit-based UI dashboard to search, preview, and review documents.
+* **`backend/`**:
+  * **`database.py`**: Handles direct collection operations (e.g. collection counts, scrolling points, and deletions) for local Qdrant collection.
+  * **`logic.py`**: Custom bilingual stemming, BM25 vectorizer state calculation, and search fusion coordination.
+* **`initialisation/`**:
+  * **`setup.py`**, **`requirements.txt`**: Dependency specifications and packaging setup details.
+  * **`start.bat`**, **`start.sh`**: Launch scripts that initialize the virtual environment, install requirements, and boot up Streamlit.
 * **`metrics/`**: Evaluation suite.
   * `evaluate_rag.py`: Evaluates retrieval metrics (Hit Rate, MRR, Recall, NDCG, MAP).
   * `evaluate_generation.py`: Simulated metrics for RAG faithfulness and constraint adherence (generation not implemented yet)
@@ -41,14 +47,14 @@ To run locally on a standard CPU without external API dependencies:
    cd STRILAB---Grupp-3
    ```
 2. **Start the application:**
-   * **Windows:** Double-click `start.bat` in File Explorer, or run it in your terminal:
+   * **Windows:** Double-click `start.bat` inside `initialisation/` in File Explorer, or run it in your terminal:
      ```cmd
-     .\start.bat
+     .\initialisation\start.bat
      ```
    * **Linux / macOS:** Make the script executable and run it in your terminal:
      ```bash
-     chmod +x start.sh
-     ./start.sh
+     chmod +x initialisation/start.sh
+     ./initialisation/start.sh
      ```
    *(This automatically sets up a `.venv` virtual environment, installs all required dependencies, and launches the Streamlit search UI).*
 3. **Index documents:**
