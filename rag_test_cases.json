@@ -1,0 +1,26 @@
+[
+  {
+    "id": 1,
+    "query": "aerial reconnaissance lesson plan objectives",
+    "ground_truth_doc": "aerial_reconnaissance.txt",
+    "expected_answer_snippet": "Accurately identify and report enemy troop movements",
+    "language": "english",
+    "query_type": "dense"
+  },
+  {
+    "id": 2,
+    "query": "Swedish Army Basic Recon Manual references",
+    "ground_truth_doc": "aerial_reconnaissance.txt",
+    "expected_answer_snippet": "Swedish Army Basic Recon Manual",
+    "language": "swedish",
+    "query_type": "hybrid"
+  },
+  {
+    "id": 3,
+    "query": "Arctic survival safety requirements",
+    "ground_truth_doc": "arctic_survival.txt",
+    "expected_answer_snippet": "arctic",
+    "language": "english",
+    "query_type": "sparse"
+  }
+]

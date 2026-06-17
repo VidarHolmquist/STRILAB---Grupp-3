@@ -21,9 +21,8 @@ To run locally on a standard CPU without external API dependencies:
 * **`backend/`**:
   * **`database.py`**: Handles direct collection operations (e.g. collection counts, scrolling points, and deletions) for local Qdrant collection.
   * **`logic.py`**: Custom bilingual stemming, BM25 vectorizer state calculation, and search fusion coordination.
-* **`initialisation/`**:
-  * **`setup.py`**, **`requirements.txt`**: Dependency specifications and packaging setup details.
-  * **`start.bat`**, **`start.sh`**: Launch scripts that initialize the virtual environment, install requirements, and boot up Streamlit.
+* **`requirements.txt`**: Dependency specifications.
+* **`skills/`**: Reusable developer workflows (skills) for agents/LLMs, including `/initialise` and `/push`.
 * **`metrics/`**: Evaluation suite.
   * `evaluate_rag.py`: Evaluates retrieval metrics (Hit Rate, MRR, Recall, NDCG, MAP).
   * `evaluate_generation.py`: Simulated metrics for RAG faithfulness and constraint adherence (generation not implemented yet)
@@ -46,17 +45,16 @@ To run locally on a standard CPU without external API dependencies:
    git clone https://github.com/VidarHolmquist/STRILAB---Grupp-3.git
    cd STRILAB---Grupp-3
    ```
-2. **Start the application:**
-   * **Windows:** Double-click `start.bat` inside `initialisation/` in File Explorer, or run it in your terminal:
-     ```cmd
-     .\initialisation\start.bat
-     ```
-   * **Linux / macOS:** Make the script executable and run it in your terminal:
-     ```bash
-     chmod +x initialisation/start.sh
-     ./initialisation/start.sh
-     ```
-   *(This automatically sets up a `.venv` virtual environment, installs all required dependencies, and launches the Streamlit search UI).*
+2. **Run setup & initialize:**
+   This repository is configured for an agent-based workflow. To initialize the environment, configure the virtual environment, install dependencies, and run/verify the application, please refer to the `/initialise` skill:
+   * **[skills/initialise.md](skills/initialise.md)**
+
+   For manual setup steps:
+   - Create a virtual environment: `python -m venv .venv`
+   - Activate it: `source .venv/bin/activate` (Linux/macOS) or `.venv\Scripts\Activate.ps1` (Windows PowerShell)
+   - Install dependencies: `pip install -r requirements.txt`
+   - Launch application: `set PYTHONPATH=.` (Windows CMD) or `$env:PYTHONPATH="."` (Windows PowerShell) or `export PYTHONPATH=.` (Linux/macOS), then `streamlit run frontend/app.py`
+
 3. **Index documents:**
    * Populate the `source_docs/` folder with text documents (Note: files must be in `.txt` format. Do not delete `.gitkeep`, as it is ignored by the engine but keeps the empty folder structure tracked in Git).
    * *Tip: If the folder contains no `.txt` files, the application will automatically generate sample documents for testing.*

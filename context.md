@@ -25,19 +25,21 @@ dependencies.
 - [backend](file:///d:/CODE/Edmond/STRILAB/backend): Retrieval engine and database integrations.
   - [backend/database.py](file:///d:/CODE/Edmond/STRILAB/backend/database.py): Connection and point scroll/upsert/delete wrappers for local Qdrant collection.
   - [backend/logic.py](file:///d:/CODE/Edmond/STRILAB/backend/logic.py): Bilingual stemming, BM25 vectorizer calculation, and search fusion coordination.
-- [initialisation](file:///d:/CODE/Edmond/STRILAB/initialisation): Environment setups and platform run scripts (`setup.py`, `requirements.txt`, `start.bat`, `start.sh`).
+- [requirements.txt](file:///d:/CODE/Edmond/STRILAB/requirements.txt): Python dependency specifications.
 
 
 ## Rules
 
 ### General
-
 1. All Python code must target Python 3.9+.
-2. Use normal, professional language in code, comments, documentation, and user interfaces; do not use edgy or overly militaristic language.
-3. Do not use emojis in code, comments, documentation, or user interfaces.
+2. Suggest creating skills for repeated workflows
+3. Update context.md when new skills are created
+
 
 ### Style & Formatting
-1. <!-- ADD RULE --> _Example: Use double quotes for strings._
+1. Do not use emojis in code, comments, documentation, or user interfaces.
+2. Use normal, professional language in code, comments, documentation, and user interfaces; do not use edgy or overly militaristic language.
+3. Code should be modular and easy to understand
 
 ### Architecture
 
@@ -51,11 +53,9 @@ dependencies.
 
 ## Skills
 
-> Skills are reusable, named workflows the AI assistant can execute.
-> Each skill has a summary here and a linked file with detailed steps.
-
 | Skill Name | Summary | Steps |
 | :--------- | :------ | :---- |
+| `/initialise` | Initialise the repository, configure virtual environment, and install dependencies | [initialise.md](skills/initialise.md) |
 | `/push` | Push to main after running checks (lint, test, clean commit message) | [push.md](skills/push.md) |
 
 > To add a new skill, create a `[skillname].md` in the `skills/` folder
