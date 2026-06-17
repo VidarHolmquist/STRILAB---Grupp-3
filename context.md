@@ -25,6 +25,9 @@ dependencies.
 - [backend](file:///d:/CODE/Edmond/STRILAB/backend): Retrieval engine and database integrations.
   - [backend/database.py](file:///d:/CODE/Edmond/STRILAB/backend/database.py): Connection and point scroll/upsert/delete wrappers for local Qdrant collection.
   - [backend/logic.py](file:///d:/CODE/Edmond/STRILAB/backend/logic.py): Bilingual stemming, BM25 vectorizer calculation, and search fusion coordination.
+- [metrics](file:///d:/CODE/Edmond/STRILAB/metrics): Evaluation scripts, test cases ([rag_test_cases.json](file:///d:/CODE/Edmond/STRILAB/metrics/rag_test_cases.json)), and metrics outputs.
+- [tests](file:///d:/CODE/Edmond/STRILAB/tests): Fast validation scripts that check syntax, imports, and interface contracts for each module.
+  - [tests/validate_module.py](file:///d:/CODE/Edmond/STRILAB/tests/validate_module.py): Validates one or all modules; exits 0 on pass, 1 on failure.
 - [requirements.txt](file:///d:/CODE/Edmond/STRILAB/requirements.txt): Python dependency specifications.
 
 
@@ -56,7 +59,10 @@ dependencies.
 | Skill Name | Summary | Steps |
 | :--------- | :------ | :---- |
 | `/initialise` | Initialise the repository, configure virtual environment, and install dependencies | [initialise.md](skills/initialise.md) |
-| `/push` | Push to main after running checks (lint, test, clean commit message) | [push.md](skills/push.md) |
+| `/validate` | Validate changed module(s) — syntax, imports, and interface contracts (fast) | [validate.md](skills/validate.md) |
+| `/validate-all` | Full-codebase validation across all tracked modules (fast) | [validate-all.md](skills/validate-all.md) |
+| `/test` | Run the full retrieval and generation metric evaluation suite (slow) | [test.md](skills/test.md) |
+| `/push` | Run `/validate-all`, commit, and push to a new feature branch for review | [push.md](skills/push.md) |
 
 > To add a new skill, create a `[skillname].md` in the `skills/` folder
 > and add a row to the table above.

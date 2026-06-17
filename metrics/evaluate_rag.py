@@ -13,8 +13,8 @@ sys.path.append(PROJECT_ROOT)
 from backend import LocalBilingualRetriever
 
 SOURCE_DOCS_DIR = os.path.join(PROJECT_ROOT, "source_docs")
-TEST_CASES_FILE = os.path.join(PROJECT_ROOT, "rag_test_cases.json")
-DEFAULT_EXPORT_FILE = os.path.join(PROJECT_ROOT, "evaluation_results.json")
+TEST_CASES_FILE = os.path.join(PROJECT_ROOT, "metrics", "rag_test_cases.json")
+DEFAULT_EXPORT_FILE = os.path.join(PROJECT_ROOT, "metrics", "evaluation_results.json")
 
 def auto_ingest_if_empty(retriever: LocalBilingualRetriever, force: bool = False):
     """
@@ -374,7 +374,7 @@ def main():
     
     # Initialize retriever pointing to the correct root db path
     print("[INFO] Initializing retriever and connecting to database...")
-    db_path = os.path.join(PROJECT_ROOT, "local_chroma_db")
+    db_path = os.path.join(PROJECT_ROOT, "local_qdrant_db")
     retriever = LocalBilingualRetriever(db_path=db_path)
     
     # Self-heal or force-ingest database index
