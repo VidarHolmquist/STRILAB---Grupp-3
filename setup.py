@@ -8,7 +8,7 @@ setup(
     packages=find_packages(),
     python_requires=">=3.9",
     install_requires=[
-        "chromadb>=0.5.0",
+        "qdrant-client>=1.10.0",
         "snowballstemmer>=2.2.0",
         "sentence-transformers>=3.0.0",
         "rank-bm25>=0.2.2",

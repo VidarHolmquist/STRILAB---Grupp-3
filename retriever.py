@@ -1,9 +1,8 @@
 import os
 import re
-import chromadb
-from chromadb.api.types import Documents, Embeddings
+import math
+import json
 from sentence_transformers import SentenceTransformer
-from rank_bm25 import BM25Okapi
 from snowballstemmer import stemmer
 
 def tokenize_and_stem(text: str) -> list[str]:
@@ -29,91 +28,339 @@ def tokenize_and_stem(text: str) -> list[str]:
     return stemmed_words
 
 
-class MultilingualE5EmbeddingFunction(chromadb.EmbeddingFunction):
+class CustomBM25Vectorizer:
+    """
+    Manages custom bilingual vocabulary mapping, IDF tracking, and
+    calculates document and query sparse vectors compatible with Qdrant.
+    """
+    def __init__(self, k1=1.5, b=0.75):
+        self.k1 = k1
+        self.b = b
+        self.vocab = {}      # term -> unique integer ID
+        self.idf = {}        # term -> IDF weight
+        self.avgdl = 0.0
+        
+    def fit(self, tokenized_corpus: list[list[str]]):
+        """Builds vocabulary, calculates term IDFs, and finds average document length."""
+        if not tokenized_corpus:
+            self.vocab = {}
+            self.idf = {}
+            self.avgdl = 0.0
+            return
+            
+        doc_freqs = {}
+        total_len = 0
+        for doc in tokenized_corpus:
+            total_len += len(doc)
+            unique_terms = set(doc)
+            for term in unique_terms:
+                doc_freqs[term] = doc_freqs.get(term, 0) + 1
+                
+        self.avgdl = total_len / len(tokenized_corpus)
+        
+        # Build deterministic vocab mapping sorted by term
+        self.vocab = {term: idx for idx, term in enumerate(sorted(doc_freqs.keys()))}
+        
+        N = len(tokenized_corpus)
+        # Standard rank-bm25 BM25Okapi IDF formula
+        for term, freq in doc_freqs.items():
+            self.idf[term] = math.log(1.0 + (N - freq + 0.5) / (freq + 0.5))
+            
+    def get_document_sparse_vector(self, tokenized_doc: list[str]) -> tuple[list[int], list[float]]:
+        """
+        Computes the sparse vector representing a document chunk.
+        Value for term t = tf * (k1 + 1) / (tf + k1 * (1 - b + b * doc_len / avgdl))
+        """
+        if not tokenized_doc or not self.vocab:
+            return [], []
+            
+        doc_len = len(tokenized_doc)
+        term_counts = {}
+        for term in tokenized_doc:
+            if term in self.vocab:
+                term_counts[term] = term_counts.get(term, 0) + 1
+                
+        indices = []
+        values = []
+        
+        sorted_terms = sorted(term_counts.keys(), key=lambda t: self.vocab[t])
+        
+        for term in sorted_terms:
+            idx = self.vocab[term]
+            tf = term_counts[term]
+            denominator = tf + self.k1 * (1.0 - self.b + self.b * doc_len / self.avgdl)
+            weight = (tf * (self.k1 + 1.0)) / denominator
+            
+            indices.append(idx)
+            values.append(float(weight))
+            
+        return indices, values
 
-    """
-    Custom embedding function class for ChromaDB.
-    Uses 'intfloat/multilingual-e5-small' locally on CPU.
-    Automatically handles 'passage: ' prefixing for documents and 'query: ' for queries.
-    """
-    def __init__(self, model_name="intfloat/multilingual-e5-small", device="cpu"):
-        self.model = SentenceTransformer(model_name, device=device)
+    def get_query_sparse_vector(self, tokenized_query: list[str]) -> tuple[list[int], list[float]]:
+        """
+        Computes the sparse vector representing a search query.
+        Value for term t = IDF(t) * query_tf.
+        """
+        if not tokenized_query or not self.vocab:
+            return [], []
+            
+        term_counts = {}
+        for term in tokenized_query:
+            if term in self.vocab:
+                term_counts[term] = term_counts.get(term, 0) + 1
+                
+        indices = []
+        values = []
         
-    def __call__(self, input: Documents) -> Embeddings:
-        # Fallback to document embedding
-        return self.embed_documents(input)
+        sorted_terms = sorted(term_counts.keys(), key=lambda t: self.vocab[t])
         
-    def embed_documents(self, input: Documents) -> Embeddings:
-        # E5 model requires documents to be prefixed with "passage: "
-        prefixed_docs = [f"passage: {doc}" for doc in input]
-        embeddings = self.model.encode(prefixed_docs, show_progress_bar=False)
-        return embeddings.tolist()
+        for term in sorted_terms:
+            idx = self.vocab[term]
+            weight = self.idf.get(term, 0.0) * term_counts[term]
+            if weight > 0:
+                indices.append(idx)
+                values.append(float(weight))
+                
+        return indices, values
+
+    def save(self, filepath: str):
+        """Saves vectorizer configuration to a JSON file."""
+        state = {
+            "k1": self.k1,
+            "b": self.b,
+            "vocab": self.vocab,
+            "idf": self.idf,
+            "avgdl": self.avgdl
+        }
+        os.makedirs(os.path.dirname(filepath), exist_ok=True)
+        with open(filepath, "w", encoding="utf-8") as f:
+            json.dump(state, f, ensure_ascii=False, indent=2)
+
+    def load(self, filepath: str):
+        """Loads vectorizer configuration from a JSON file."""
+        if not os.path.exists(filepath):
+            return
+        with open(filepath, "r", encoding="utf-8") as f:
+            state = json.load(f)
+        self.k1 = state["k1"]
+        self.b = state["b"]
+        self.vocab = state["vocab"]
+        self.idf = state["idf"]
+        self.avgdl = state["avgdl"]
+
+
+class QdrantCollectionWrapper:
+    """Provides compatibility wrapper for app.py that expects Chroma's collection.count() API."""
+    def __init__(self, client, collection_name):
+        self.client = client
+        self.collection_name = collection_name
         
-    def embed_query(self, input: Documents) -> Embeddings:
-        # E5 model requires queries to be prefixed with "query: "
-        prefixed_queries = [f"query: {doc}" for doc in input]
-        embeddings = self.model.encode(prefixed_queries, show_progress_bar=False)
-        return embeddings.tolist()
+    def count(self) -> int:
+        try:
+            count = self.client.get_collection(self.collection_name).points_count
+            return count if count is not None else 0
+        except Exception:
+            return 0
 
 
 class LocalBilingualRetriever:
     """
-    A modular hybrid retriever that combines dense semantic search (E5 vectors via ChromaDB)
-    and sparse keyword search (BM25) with Reciprocal Rank Fusion (RRF).
+    A modular hybrid retriever that combines dense semantic search (E5 vectors via Qdrant)
+    and sparse keyword search (BM25) with Reciprocal Rank Fusion (RRF) at the database level.
     Supports English and Swedish natively.
     """
-    def __init__(self, db_path="./local_chroma_db", collection_name="bilingual_rag"):
+    def __init__(self, db_path="./local_qdrant_db", collection_name="bilingual_rag"):
         """Initializes database, embedding function, and registers runtime state."""
-        self.client = chromadb.PersistentClient(path=db_path)
+        from qdrant_client import QdrantClient
+        from qdrant_client.models import VectorParams, Distance, SparseVectorParams, SparseIndexParams
+        
+        self.db_path = db_path
+        self.collection_name = collection_name
+        self.client = QdrantClient(path=db_path)
         
         # Load local bilingual E5 embedding function
-        self.dense_ef = MultilingualE5EmbeddingFunction(
-            model_name="intfloat/multilingual-e5-small",
-            device="cpu"
-        )
+        self.model = SentenceTransformer("intfloat/multilingual-e5-small", device="cpu")
         
-        # Connect to ChromaDB collection
-        self.collection = self.client.get_or_create_collection(
-            name=collection_name,
-            embedding_function=self.dense_ef
-        )
+        # Setup BM25 vectorizer configuration
+        self.bm25_vectorizer = CustomBM25Vectorizer()
+        self.bm25_state_path = os.path.join(db_path, "bm25_state.json")
+        
+        # Verify collection exists with dense and sparse configs
+        collection_exists = False
+        try:
+            self.client.get_collection(collection_name)
+            collection_exists = True
+        except Exception:
+            pass
+            
+        if not collection_exists:
+            self.client.create_collection(
+                collection_name=collection_name,
+                vectors_config={
+                    "dense": VectorParams(
+                        size=384,
+                        distance=Distance.COSINE
+                    )
+                },
+                sparse_vectors_config={
+                    "sparse": SparseVectorParams(
+                        index=SparseIndexParams(
+                            on_disk=False
+                        )
+                    )
+                }
+            )
+            
+        # UI backward compatibility wrapper
+        self.collection = QdrantCollectionWrapper(self.client, collection_name)
         
         # Keyword index tracking variables
-        self.bm25 = None
         self.indexed_chunks = []
         self.indexed_metadatas = []
         
         # Sync keyword index with existing data if database is already populated
+        if os.path.exists(self.bm25_state_path):
+            self.bm25_vectorizer.load(self.bm25_state_path)
+            
         if not self.is_empty():
-            self._rebuild_keyword_index()
+            self._sync_local_lists()
 
     def is_empty(self) -> bool:
         """Returns True if the database contains zero documents."""
-        return self.collection.count() == 0
+        try:
+            count = self.client.get_collection(self.collection_name).points_count
+            return count is None or count == 0
+        except Exception:
+            return True
+
+    def _get_all_points(self):
+        """Fetches all points from Qdrant using pagination."""
+        all_points = []
+        offset = None
+        while True:
+            records, offset = self.client.scroll(
+                collection_name=self.collection_name,
+                limit=1000,
+                with_payload=True,
+                with_vectors=False,
+                offset=offset
+            )
+            all_points.extend(records)
+            if offset is None:
+                break
+        return all_points
+
+    def _sync_local_lists(self):
+        """Syncs local in-memory structures from database contents."""
+        all_points = self._get_all_points()
+        # Sort by point ID to maintain insertion order
+        all_points.sort(key=lambda p: p.id if isinstance(p.id, int) else 0)
+        
+        self.indexed_chunks = [p.payload.get("text", "") for p in all_points if p.payload]
+        self.indexed_metadatas = [
+            {"source_document": p.payload.get("source_document", "Unknown")}
+            for p in all_points if p.payload
+        ]
 
     def _rebuild_keyword_index(self):
-        """Fetches all documents from ChromaDB and rebuilds the BM25 keyword index."""
-        existing_data = self.collection.get(include=["documents", "metadatas"])
-        if existing_data and existing_data["documents"]:
-            self.indexed_chunks = existing_data["documents"]
-            self.indexed_metadatas = existing_data["metadatas"]
+        """Fetches all documents from Qdrant, fits the BM25 vectorizer, and updates sparse vectors."""
+        all_points = self._get_all_points()
+        all_points.sort(key=lambda p: p.id if isinstance(p.id, int) else 0)
+        
+        self.indexed_chunks = [p.payload.get("text", "") for p in all_points if p.payload]
+        self.indexed_metadatas = [
+            {"source_document": p.payload.get("source_document", "Unknown")}
+            for p in all_points if p.payload
+        ]
+        
+        if not self.indexed_chunks:
+            self.bm25_vectorizer = CustomBM25Vectorizer()
+            if os.path.exists(self.bm25_state_path):
+                try:
+                    os.remove(self.bm25_state_path)
+                except Exception:
+                    pass
+            return
             
-            # Tokenize documents using bilingual tokenizer and stemmer
-            tokenized_corpus = [tokenize_and_stem(doc) for doc in self.indexed_chunks]
-            self.bm25 = BM25Okapi(tokenized_corpus)
+        # Tokenize documents using bilingual tokenizer and stemmer
+        tokenized_corpus = [tokenize_and_stem(doc) for doc in self.indexed_chunks]
+        self.bm25_vectorizer.fit(tokenized_corpus)
+        self.bm25_vectorizer.save(self.bm25_state_path)
+        
+        # Generate and update sparse vectors in Qdrant
+        from qdrant_client.models import PointVectors, SparseVector
+        
+        point_vectors = []
+        for point, tokenized_doc in zip(all_points, tokenized_corpus):
+            indices, values = self.bm25_vectorizer.get_document_sparse_vector(tokenized_doc)
+            point_vectors.append(
+                PointVectors(
+                    id=point.id,
+                    vector={
+                        "sparse": SparseVector(
+                            indices=indices,
+                            values=values
+                        )
+                    }
+                )
+            )
+            
+        if point_vectors:
+            self.client.update_vectors(
+                collection_name=self.collection_name,
+                points=point_vectors
+            )
 
     def clear_database(self):
         """Deletes all documents inside the collection to allow a fresh ingest."""
-        existing = self.collection.get()
-        if existing and existing["ids"]:
-            self.collection.delete(ids=existing["ids"])
-        self.bm25 = None
+        from qdrant_client.models import Filter
+        
+        try:
+            # Delete all points inside the collection using a match-all filter.
+            # This is extremely robust and avoids file locking issues on Windows.
+            self.client.delete(
+                collection_name=self.collection_name,
+                points_selector=Filter()
+            )
+        except Exception as e:
+            print(f"Note: failed to delete points via selector: {e}")
+            try:
+                self.client.delete_collection(self.collection_name)
+                # Recreate the collection
+                from qdrant_client.models import VectorParams, Distance, SparseVectorParams, SparseIndexParams
+                self.client.create_collection(
+                    collection_name=self.collection_name,
+                    vectors_config={
+                        "dense": VectorParams(
+                            size=384,
+                            distance=Distance.COSINE
+                        )
+                    },
+                    sparse_vectors_config={
+                        "sparse": SparseVectorParams(
+                            index=SparseIndexParams(
+                                on_disk=False
+                            )
+                        )
+                    }
+                )
+            except Exception as ex:
+                print(f"Error recreating collection: {ex}")
+        
+        # Clear BM25 state
+        if os.path.exists(self.bm25_state_path):
+            try:
+                os.remove(self.bm25_state_path)
+            except Exception:
+                pass
+                
+        self.bm25_vectorizer = CustomBM25Vectorizer()
         self.indexed_chunks = []
         self.indexed_metadatas = []
-        print("🧹 Local database collection cleared successfully.")
+        print("[clean] Local database collection cleared successfully.")
 
     def chunk_and_add_document(self, text: str, source_name: str, chunk_size: int = 50, overlap: int = 10):
-        """Splits a document into overlapping word-level chunks and saves them in ChromaDB."""
+        """Splits a document into overlapping word-level chunks and saves them in Qdrant."""
         words = text.split()
         chunks = []
         metadatas = []
@@ -128,15 +375,37 @@ class LocalBilingualRetriever:
                 break
 
         if chunks:
+            # E5 model requires documents to be prefixed with "passage: "
+            prefixed_docs = [f"passage: {doc}" for doc in chunks]
+            embeddings = self.model.encode(prefixed_docs, show_progress_bar=False).tolist()
+            
             current_count = self.collection.count()
-            ids = [f"doc_{current_count + idx}" for idx in range(len(chunks))]
+            ids = [current_count + idx for idx in range(len(chunks))]
             
-            # Save dense vectors and text chunks into ChromaDB
-            self.collection.add(documents=chunks, metadatas=metadatas, ids=ids)
+            from qdrant_client.models import PointStruct
             
-            # Rebuild keyword index to include new chunks
-            self._rebuild_keyword_index()
-            print(f"📥 Indexed and saved '{source_name}' ({len(chunks)} chunks).")
+            points = []
+            for point_id, doc, meta, dense_vector in zip(ids, chunks, metadatas, embeddings):
+                points.append(
+                    PointStruct(
+                        id=point_id,
+                        vector={
+                            "dense": dense_vector
+                        },
+                        payload={
+                            "text": doc,
+                            "source_document": meta["source_document"]
+                        }
+                    )
+                )
+                
+            self.client.upsert(
+                collection_name=self.collection_name,
+                points=points
+            )
+            
+            # Print status; keyword index will be rebuilt at the end of ingestion by app.py calling _rebuild_keyword_index()
+            print(f"[ingest] Indexed and saved '{source_name}' ({len(chunks)} chunks).")
 
     # =========================================================================
     # MODULAR RETRIEVAL PIPELINE STAGES
@@ -145,78 +414,82 @@ class LocalBilingualRetriever:
     def preprocess_query(self, query: str) -> str:
         """
         Stage 1: Preprocesses the query.
-        This serves as a placeholder where modular features (e.g., query translation,
-        query rewriting, or synonym expansion) can be added in the future.
         """
-        # Currently passes the query through unchanged
         return query
 
     def dense_search(self, query: str, limit: int) -> list[dict]:
         """
         Stage 2: Dense Semantic Search.
-        Queries ChromaDB using the multilingual E5 embedding model.
-        Query strings are prefixed with 'query: ' as required by the E5 model.
+        Queries Qdrant using the multilingual E5 embedding model.
         """
         if self.is_empty():
             return []
             
-        results = self.collection.query(
-            query_texts=[query],
-            n_results=limit,
-            include=["documents", "distances", "metadatas"]
+        prefixed_query = f"query: {query}"
+        dense_query_vector = self.model.encode(prefixed_query, show_progress_bar=False).tolist()
+        
+        query_res = self.client.query_points(
+            collection_name=self.collection_name,
+            query=dense_query_vector,
+            using="dense",
+            limit=limit
         )
         
         dense_hits = []
-        if results and results["documents"] and results["documents"][0]:
-            documents = results["documents"][0]
-            distances = results["distances"][0]
-            metadatas = results["metadatas"][0]
-            
-            for doc, dist, meta in zip(documents, distances, metadatas):
-                dense_hits.append({
-                    "text": doc,
-                    "score": float(dist),
-                    "metadata": meta,
-                    "source": meta.get("source_document", "Unknown Source")
-                })
+        for point in query_res.points:
+            score = point.score if point.score is not None else 0.0
+            dense_hits.append({
+                "text": point.payload.get("text", ""),
+                "score": float(score),
+                "metadata": {"source_document": point.payload.get("source_document")},
+                "source": point.payload.get("source_document", "Unknown Source")
+            })
         return dense_hits
 
     def sparse_search(self, query: str, limit: int) -> list[dict]:
         """
         Stage 3: Sparse Keyword Search.
-        Evaluates exact keyword overlap scores using BM25 across all indexed chunks.
+        Queries Qdrant using the BM25 sparse index.
         """
-        if self.is_empty() or not self.bm25:
+        if self.is_empty():
             return []
             
         tokenized_query = tokenize_and_stem(query)
-        bm25_scores = self.bm25.get_scores(tokenized_query)
+        sparse_indices, sparse_values = self.bm25_vectorizer.get_query_sparse_vector(tokenized_query)
+        if not sparse_indices:
+            return []
+            
+        from qdrant_client.models import SparseVector
+        
+        query_res = self.client.query_points(
+            collection_name=self.collection_name,
+            query=SparseVector(
+                indices=sparse_indices,
+                values=sparse_values
+            ),
+            using="sparse",
+            limit=limit
+        )
         
         sparse_hits = []
-        for idx, (doc, meta) in enumerate(zip(self.indexed_chunks, self.indexed_metadatas)):
-            score = float(bm25_scores[idx])
-            if score > 0:
-                sparse_hits.append({
-                    "text": doc,
-                    "score": score,
-                    "metadata": meta,
-                    "source": meta.get("source_document", "Unknown Source")
-                })
-                
-        # Sort by BM25 score descending
-        sparse_hits.sort(key=lambda x: x["score"], reverse=True)
-        return sparse_hits[:limit]
+        for point in query_res.points:
+            score = point.score if point.score is not None else 0.0
+            sparse_hits.append({
+                "text": point.payload.get("text", ""),
+                "score": float(score),
+                "metadata": {"source_document": point.payload.get("source_document")},
+                "source": point.payload.get("source_document", "Unknown Source")
+            })
+        return sparse_hits
 
     def hybrid_fuse(self, dense_hits: list[dict], sparse_hits: list[dict], limit: int) -> list[dict]:
         """
         Stage 4: Hybrid Rank Fusion.
-        Merges dense search results and sparse keyword search results using
-        Reciprocal Rank Fusion (RRF). This avoids scale compatibility issues.
+        This remains for backwards compatibility only.
         """
-        k = 60  # RRF constant
+        k = 60
         rrf_scores = {}
         
-        # Score dense results based on rank position
         for rank, hit in enumerate(dense_hits):
             doc_text = hit["text"]
             if doc_text not in rrf_scores:
@@ -228,7 +501,6 @@ class LocalBilingualRetriever:
                 }
             rrf_scores[doc_text]["rrf_score"] += 1.0 / (k + (rank + 1))
             
-        # Score sparse results based on rank position
         for rank, hit in enumerate(sparse_hits):
             doc_text = hit["text"]
             if doc_text not in rrf_scores:
@@ -240,10 +512,7 @@ class LocalBilingualRetriever:
                 }
             rrf_scores[doc_text]["rrf_score"] += 1.0 / (k + (rank + 1))
             
-        # Sort candidates by combined RRF score descending
         sorted_hits = sorted(rrf_scores.values(), key=lambda x: x["rrf_score"], reverse=True)
-        
-        # Calculate a normalized confidence percentage (max RRF possible is 2/(k+1) if rank 1 in both lists)
         max_rrf_possible = 2.0 / (k + 1)
         
         final_hits = []
@@ -260,24 +529,72 @@ class LocalBilingualRetriever:
     def retrieve(self, query: str, limit: int = 3) -> list[dict]:
         """
         Orchestration Entry Point.
-        Runs the full modular pipeline: preprocessing -> searches -> hybrid fusion.
+        Runs the hybrid retrieval using Qdrant's native query API with RRF fusion.
         """
         if self.is_empty():
             return []
             
-        # 1. Preprocess Query
         processed_query = self.preprocess_query(query)
+        overfetch_limit = max(20, limit * 3)
         
-        # Over-fetch search candidates to ensure rank overlap for RRF
-        overfetch_limit = limit * 3
+        # Dense representation
+        prefixed_query = f"query: {processed_query}"
+        dense_query_vector = self.model.encode(prefixed_query, show_progress_bar=False).tolist()
         
-        # 2. Dense Semantic Search
-        dense_hits = self.dense_search(processed_query, limit=overfetch_limit)
+        # Sparse representation
+        tokenized_query = tokenize_and_stem(processed_query)
+        sparse_indices, sparse_values = self.bm25_vectorizer.get_query_sparse_vector(tokenized_query)
         
-        # 3. Sparse Keyword Search
-        sparse_hits = self.sparse_search(processed_query, limit=overfetch_limit)
+        from qdrant_client.models import Prefetch, FusionQuery, Fusion, SparseVector
         
-        # 4. Reciprocal Rank Fusion
-        fused_hits = self.hybrid_fuse(dense_hits, sparse_hits, limit=limit)
-        
-        return fused_hits
+        if sparse_indices:
+            # Query Qdrant with both dense and sparse sub-queries and fuse via RRF
+            query_res = self.client.query_points(
+                collection_name=self.collection_name,
+                prefetch=[
+                    Prefetch(
+                        query=dense_query_vector,
+                        using="dense",
+                        limit=overfetch_limit
+                    ),
+                    Prefetch(
+                        query=SparseVector(
+                            indices=sparse_indices,
+                            values=sparse_values
+                        ),
+                        using="sparse",
+                        limit=overfetch_limit
+                    )
+                ],
+                query=FusionQuery(
+                    fusion=Fusion.RRF
+                ),
+                limit=limit
+            )
+        else:
+            # Fallback to dense-only query if search term does not map to vocabulary
+            query_res = self.client.query_points(
+                collection_name=self.collection_name,
+                query=dense_query_vector,
+                using="dense",
+                limit=limit
+            )
+            
+        # Qdrant RRF uses k=1 by default; the maximum score with 2 query lists is 1/(1+1) + 1/(1+1) = 1.0
+        max_rrf_possible = 1.0
+        results = []
+        for point in query_res.points:
+            score = point.score if point.score is not None else 0.0
+            if sparse_indices:
+                confidence = round((score / max_rrf_possible) * 100, 1)
+            else:
+                confidence = round(score * 100, 1)
+                
+            results.append({
+                "text": point.payload.get("text", ""),
+                "confidence": confidence,
+                "source": point.payload.get("source_document", "Unknown Source"),
+                "metadata": {"source_document": point.payload.get("source_document")}
+            })
+            
+        return results

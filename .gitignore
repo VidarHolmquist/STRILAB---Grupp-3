@@ -1,7 +1,8 @@
 # --- Database Storage ---
-# This ignores the local ChromaDB database folder. 
+# This ignores the local database folders. 
 # It keeps your repository lightweight and fast to clone.
 local_chroma_db/
+local_qdrant_db/
 
 # --- Virtual Environments ---
 # Ignores the local Python packages installed in the virtual environment.
