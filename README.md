@@ -25,9 +25,10 @@ To run locally on a standard CPU without external API dependencies:
 * **`skills/`**: Reusable developer workflows (skills) for agents/LLMs, including `/initialise` and `/push`.
 * **`metrics/`**: Evaluation suite.
   * `evaluate_rag.py`: Evaluates retrieval metrics (Hit Rate, MRR, Recall, NDCG, MAP).
-  * `evaluate_generation.py`: Simulated metrics for RAG faithfulness and constraint adherence (generation not implemented yet)
+  * `evaluate_generation.py`: Simulated metrics for RAG faithfulness and constraint adherence (generation not implemented yet).
+  * `rag_test_cases.json`: Ground-truth dataset containing Swedish, English, and cross-lingual test queries.
+  * `evaluation_results.json` (gitignored): Detailed output report of metrics from the latest evaluation.
 * **`source_docs/`**: Directory containing target **`.txt`** documents to index.
-* **`rag_test_cases.json`**: Ground-truth dataset containing Swedish, English, and cross-lingual test queries.
 
 ---
 
@@ -74,7 +75,7 @@ To run locally on a standard CPU without external API dependencies:
 
 ## Evaluation Protocols & Baseline Results
 
-The testing scripts reside in the `metrics/` folder and calculate metrics against the `rag_test_cases.json` suite.
+The testing scripts reside in the `metrics/` folder and calculate metrics against the `metrics/rag_test_cases.json` suite.
 
 ### Glossary
 * **Sparse (BM25):** Exact keyword overlap matching.
