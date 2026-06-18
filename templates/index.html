@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Bibliotek</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <header>
+        <h1>Bibliotek</h1>
+        <form method="post" action="{{ url_for('rebuild') }}">
+            <button type="submit" class="btn">🔄 Rebuild Database Index</button>
+        </form>
+    </header>
+    <main>
+        <div class="results-pane">
+            {% with messages = get_flashed_messages() %}
+                {% if messages %}
+                    {% for msg in messages %}
+                        <p class="muted" style="margin-bottom:16px;">{{ msg }}</p>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+            <form method="get" action="/">
+                <input class="input" type="search" name="q" value="{{ q }}" placeholder="Sök övningsplaner..." autofocus>
+                <button class="btn" type="submit">Sök</button>
+            </form>
+            {% if q %}
+                {% if results %}
+                    <ul style="list-style:none; margin-top:24px;">
+                    {% for row in results %}
+                        <li style="margin-bottom:8px;">
+                            <a class="card" href="{{ url_for('index', q=q, preview=row.filename, page=row.page) }}">
+                                <div>
+                                    <strong>{{ row.filename }}</strong>
+                                    <span class="muted">Match: {{ row.confidence }}%</span>
+                                </div>
+                                <p class="muted">{{ row.excerpt | safe }}</p>
+                            </a>
+                            <a href="{{ url_for('serve_file', filename=row.filename, download=1) }}" class="btn" style="margin-top: 5px;">Ladda ned</a>
+                        </li>
+                    {% endfor %}
+                    </ul>
+                {% else %}
+                    <p class="muted" style="margin-top:24px;">Inga resultat hittades</p>
+                {% endif %}
+            {% endif %}
+        </div>
+        <div class="preview-pane">
+            {% if preview_kind == 'pdf' %}
+                <iframe src="{{ url_for('static', filename='vendor/pdfjs/web/viewer.html') }}?file={{ url_for('serve_file', filename=preview_filename) | urlencode }}{% if preview_page or preview_query_terms %}#{% if preview_page %}page={{ preview_page }}{% endif %}{% if preview_page and preview_query_terms %}&{% endif %}{% if preview_query_terms %}search={{ preview_query_terms | join(' ') | urlencode }}&phrase=false{% endif %}{% endif %}" title="{{ preview_filename }}"></iframe>
+            {% elif preview_filename %}
+                <iframe src="{{ url_for('serve_file', filename=preview_filename) }}{% if preview_query_terms %}#:~:{% for term in preview_query_terms %}text={{ term | urlencode }}{% if not loop.last %}&{% endif %}{% endfor %}{% endif %}" title="{{ preview_filename }}"></iframe>
+            {% else %}
+                <p class="muted">Klicka på ett sökresultat för att förhandsgranska det här.</p>
+            {% endif %}
+        </div>
+    </main>
+</body>
+</html>

@@ -35,5 +35,5 @@ pip install -r requirements.txt
 echo "✅ All dependencies verified/installed."
 
 echo
-echo "🚀 Launching Streamlit Search UI..."
-streamlit run app.py
+echo "🚀 Launching Flask Search UI..."
+python3 app.py

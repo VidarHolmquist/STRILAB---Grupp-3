@@ -45,7 +45,7 @@ if errorlevel 1 (
 echo ✅ All dependencies verified/installed.
 
 echo.
-echo 🚀 Launching Streamlit Search UI...
-streamlit run app.py
+echo 🚀 Launching Flask Search UI...
+python app.py
 
 pause

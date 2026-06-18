@@ -1,178 +1,65 @@
 import os
-import html
 import re
-import streamlit as st
+import html
+import mimetypes
+from pypdf import PdfReader
+from flask import Flask, render_template, request, redirect, url_for, flash, send_from_directory
+
 from retriever import LocalBilingualRetriever
 
-# =============================================================================
-# 1. UI Page Setup
-# =============================================================================
-st.set_page_config(
-    page_title="Local Hybrid Search",
-    page_icon="🔍",
-    layout="wide"
-)
+mimetypes.add_type('text/javascript', '.mjs')
+mimetypes.add_type('application/wasm', '.wasm')
 
-# Custom premium styling
-st.markdown("""
-<style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@400;500;600;700&display=swap');
-    
-    /* Global Fonts */
-    html, body, [class*="css"] {
-        font-family: 'Inter', sans-serif;
-    }
-    h1, h2, h3, .app-title {
-        font-family: 'Outfit', sans-serif;
-    }
-    
-    /* Premium Header */
-    .app-title-container {
-        text-align: center;
-        margin-bottom: 2rem;
-        background: linear-gradient(135deg, #4285F4 0%, #34A853 50%, #FBBC05 100%);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-    }
-    
-    /* Result Card Styles */
-    .result-card {
-        background-color: rgba(255, 255, 255, 0.03);
-        border: 1px solid rgba(255, 255, 255, 0.08);
-        border-radius: 12px;
-        padding: 1.25rem;
-        margin-bottom: 1.25rem;
-        transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
-    }
-    .result-card:hover {
-        transform: translateY(-2px);
-        border-color: rgba(66, 133, 244, 0.4);
-        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
-    }
-    .result-header {
-        font-size: 0.85rem;
-        color: #888888;
-        margin-bottom: 0.5rem;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-    }
-    .result-badge {
-        background-color: rgba(66, 133, 244, 0.15);
-        color: #4285F4;
-        padding: 2px 8px;
-        border-radius: 4px;
-        font-weight: 600;
-        font-size: 0.75rem;
-    }
-    .result-snippet {
-        font-size: 0.95rem;
-        color: #dddddd;
-        line-height: 1.6;
-        margin-bottom: 1rem;
-    }
-    
-    /* Document Viewer Styles */
-    .viewer-container {
-        background-color: rgba(0, 0, 0, 0.15);
-        border: 1px solid rgba(255, 255, 255, 0.08);
-        border-radius: 12px;
-        padding: 1.5rem;
-        height: 600px;
-        overflow-y: auto;
-    }
-    .viewer-content {
-        font-family: 'Courier New', Courier, monospace;
-        font-size: 0.9rem;
-        line-height: 1.6;
-        color: #cccccc;
-        white-space: pre-wrap;
-    }
-    .viewer-placeholder {
-        display: flex;
-        flex-direction: column;
-        justify-content: center;
-        align-items: center;
-        height: 400px;
-        color: #666666;
-        text-align: center;
-        border: 2px dashed rgba(255, 255, 255, 0.05);
-        border-radius: 12px;
-    }
-</style>
-""", unsafe_allow_html=True)
+app = Flask(__name__)
+app.secret_key = 'dev'
 
-
-# =============================================================================
-# 2. Text Highlighting Helper
-# =============================================================================
-def highlight_query_terms(text: str, query: str) -> str:
-    """Highlights terms from the search query inside the text using HTML <mark> tags."""
-    if not query:
-        return html.escape(text)
-        
-    # Extract terms (words with 3 or more characters)
-    raw_words = query.split()
-    words = []
-    for w in raw_words:
-        cleaned = w.strip("?,.!-()\"'[]:;{}/*&^%$#@!+=")
-        if len(cleaned) >= 3:
-            words.append(cleaned)
-            
-    escaped_text = html.escape(text)
-    if not words:
-        return escaped_text
-        
-    # Build a regex matching any of the query terms on word boundaries
-    try:
-        pattern = re.compile(r'\b(' + '|'.join(map(re.escape, words)) + r')\b', re.IGNORECASE)
-        # Wrap matching words in styled mark tags
-        highlighted = pattern.sub(
-            r'<mark style="background-color: rgba(252, 229, 136, 0.95); color: #111111; border-radius: 3px; padding: 1px 3px; font-weight: 500;">\1</mark>',
-            escaped_text
-        )
-        return highlighted
-    except Exception:
-        return escaped_text
-
-
-# =============================================================================
-# 3. Initialization & State Management
-# =============================================================================
 FOLDER_PATH = "./source_docs"
 
-@st.cache_resource
-def get_retriever():
-    """Initializes and returns the LocalBilingualRetriever (cached)."""
-    return LocalBilingualRetriever()
-
-retriever = get_retriever()
-
-# Initialize session state keys
-if "selected_document" not in st.session_state:
-    st.session_state.selected_document = None
-if "search_query" not in st.session_state:
-    st.session_state.search_query = ""
-if "results" not in st.session_state:
-    st.session_state.results = []
-if "has_searched" not in st.session_state:
-    st.session_state.has_searched = False
+retriever = LocalBilingualRetriever()
 
 
-# =============================================================================
-# 4. Ingestion / Rebuilding Logic
-# =============================================================================
-def rebuild_database():
-    """Clears ChromaDB and reads/embeds all documents in source_docs."""
+def highlight_query_terms(text: str, query: str) -> str:
+    """Wraps query terms (3+ chars) found in text with <mark> tags. Returns escaped, safe HTML."""
+    escaped_text = html.escape(text)
+    words = [w.strip("?,.!-()\"'[]:;{}/*&^%$#@!+=") for w in query.split()]
+    words = [w for w in words if len(w) >= 3]
+    if not words:
+        return escaped_text
+
+    pattern = re.compile(r'\b(' + '|'.join(map(re.escape, words)) + r')\b', re.IGNORECASE)
+    return pattern.sub(r'<mark>\1</mark>', escaped_text)
+
+
+def clean_query_terms(query: str) -> list[str]:
+    """Query words (3+ chars, punctuation stripped) used to drive preview scroll-to/highlight.
+    Searching for these directly (rather than a phrase reconstructed from chunk text) avoids
+    mismatches from PDF-extraction artifacts like hyphenated line-wraps or bullet characters."""
+    terms = [w.strip("?,.!-()\"'[]:;{}/*&^%$#@!+=") for w in query.split()]
+    return [t for t in terms if len(t) >= 3]
+
+
+def extract_pdf_pages(path: str) -> list[str]:
+    reader = PdfReader(path)
+    return [page.extract_text() or "" for page in reader.pages]
+
+
+def preview_kind_for(filename: str) -> str:
+    ext = os.path.splitext(filename)[1].lower()
+    if ext == ".pdf":
+        return "pdf"
+    return "text"
+
+
+def rebuild_index():
+    """Clears the collection and re-indexes every .txt/.pdf file in source_docs/."""
     retriever.clear_database()
-    
+
     if not os.path.exists(FOLDER_PATH):
         os.makedirs(FOLDER_PATH)
         return False, f"Created folder '{FOLDER_PATH}'. Please put documents there."
-        
-    files = [f for f in os.listdir(FOLDER_PATH) if f.endswith(".txt")]
+
+    files = [f for f in os.listdir(FOLDER_PATH) if f.lower().endswith((".txt", ".pdf"))]
     if not files:
-        # Auto-create sample documents if folder is completely empty
         sample_docs = {
             "demo_booby_traps.txt": (
                 "BOOBY TRAP SAFETY PROCEDURES (JUNGLE OPS)\n\n"
@@ -192,183 +79,88 @@ def rebuild_database():
                 f.write(content)
         files = list(sample_docs.keys())
 
-    # Index each document
-    progress_bar = st.sidebar.progress(0.0)
-    for idx, fname in enumerate(files):
+    indexed = 0
+    skipped = 0
+    for fname in files:
         fpath = os.path.join(FOLDER_PATH, fname)
-        with open(fpath, "r", encoding="utf-8", errors="ignore") as f:
-            text = f.read()
-        retriever.chunk_and_add_document(text, fname)
-        progress_bar.progress((idx + 1) / len(files))
-        
-    progress_bar.empty()
-    return True, f"Successfully indexed {len(files)} document(s)!"
-
-
-# =============================================================================
-# 5. Sidebar Layout & Database Utilities
-# =============================================================================
-with st.sidebar:
-    st.image("https://img.icons8.com/nolan/128/binoculars.png", width=80)
-    st.markdown("<h2 style='margin-top:0;'>Admin</h2>", unsafe_allow_html=True)
-    st.markdown("Local Hybrid Search (English & Swedish)")
-    st.divider()
-    
-    # Database Status Details
-    is_empty = retriever.is_empty()
-    total_chunks = 0 if is_empty else retriever.collection.count()
-    unique_sources = {meta.get("source_document") for meta in retriever.indexed_metadatas if meta and "source_document" in meta}
-    
-    st.markdown("**📁 Database Statistics**")
-    st.write(f"- Collection Count: `{total_chunks} chunks`")
-    st.write(f"- Indexed Files: `{len(unique_sources)} files`")
-    st.write(f"- Model: `E5-Small (Multilingual)`")
-    st.write(f"- Mode: `Dense Vector + BM25 Hybrid`")
-    
-    st.divider()
-    
-    # Ingestion Controls
-    st.markdown("**🛠️ Data Management**")
-    if st.button("🔄 Rebuild Database Index", use_container_width=True):
-        with st.spinner("Clearing and re-indexing source documents..."):
-            success, msg = rebuild_database()
-            if success:
-                st.success(msg)
-                # Re-sync local lists
-                retriever._rebuild_keyword_index()
-                st.rerun()
+        try:
+            if preview_kind_for(fname) == "pdf":
+                pages = extract_pdf_pages(fpath)
+                added_any = False
+                for page_number, page_text in enumerate(pages, start=1):
+                    if page_text.strip():
+                        retriever.chunk_and_add_document(page_text, fname, extra_metadata={"page": page_number})
+                        added_any = True
+                if added_any:
+                    indexed += 1
+                else:
+                    skipped += 1
             else:
-                st.warning(msg)
-                
-    st.caption("Clears database memory and reads all `.txt` documents from `./source_docs` folder.")
+                with open(fpath, "r", encoding="utf-8", errors="ignore") as f:
+                    text = f.read()
+
+                if not text.strip():
+                    skipped += 1
+                    continue
+
+                retriever.chunk_and_add_document(text, fname)
+                indexed += 1
+        except Exception:
+            skipped += 1
+
+    message = f"Successfully indexed {indexed} document(s)!"
+    if skipped:
+        message += f" Skipped {skipped} file(s) that couldn't be read."
+    return True, message
 
 
-# =============================================================================
-# 6. Main Application Layout
-# =============================================================================
+@app.route('/')
+def index():
+    q = request.args.get('q', '').strip()
+    results = []
+    if q:
+        hits = retriever.retrieve(q, limit=5)
+        for hit in hits:
+            results.append({
+                "filename": hit["source"],
+                "excerpt": highlight_query_terms(hit["text"], q),
+                "confidence": hit["confidence"],
+                "page": hit["metadata"].get("page"),
+            })
 
-# Title
-st.markdown("<div class='app-title-container'><h1 style='font-size: 3rem; margin-bottom: 0;'>Edmond</h1><p style='color:#aaaaaa; font-size:1.1rem; margin-top:0.5rem;'>Bilingual Semantic & Keyword Search Engine</p></div>", unsafe_allow_html=True)
+    preview_filename = request.args.get('preview', '').strip()
+    is_safe_filename = preview_filename and os.path.basename(preview_filename) == preview_filename
+    if not is_safe_filename or not os.path.isfile(os.path.join(FOLDER_PATH, preview_filename)):
+        preview_filename = None
 
-# Search Bar Form
-with st.form(key="search_form", clear_on_submit=False):
-    col_input, col_btn = st.columns([5, 1])
-    with col_input:
-        query_input = st.text_input(
-            label="Search input",
-            value=st.session_state.search_query,
-            placeholder="Type search terms or semantic questions (e.g. 'stridsutrustning' or 'trip wire')...",
-            label_visibility="collapsed"
-        )
-    with col_btn:
-        submit_btn = st.form_submit_button(label="Search", use_container_width=True)
+    preview_kind = preview_kind_for(preview_filename) if preview_filename else None
+    preview_query_terms = clean_query_terms(q) if preview_filename else []
+    raw_page = request.args.get('page', '').strip()
+    preview_page = raw_page if preview_filename and raw_page.isdigit() else None
 
-# Trigger Search
-if submit_btn and query_input.strip():
-    st.session_state.search_query = query_input
-    with st.spinner("Executing hybrid vector & semantic retrieval..."):
-        st.session_state.results = retriever.retrieve(query_input, limit=5)
-        st.session_state.has_searched = True
-        # Clear selected document when doing a new search
-        st.session_state.selected_document = None
+    return render_template(
+        'index.html',
+        q=q,
+        results=results,
+        preview_filename=preview_filename,
+        preview_kind=preview_kind,
+        preview_query_terms=preview_query_terms,
+        preview_page=preview_page,
+    )
 
 
-# =============================================================================
-# 7. Split Layout: Results vs Document Viewer
-# =============================================================================
-if st.session_state.has_searched:
-    
-    # Create the two columns for Master-Detail view
-    col_results, col_viewer = st.columns([3, 2])
-    
-    # --- Column 1: Search Results List ---
-    with col_results:
-        st.markdown(f"### 🔍 Search Results (`{len(st.session_state.results)} hits`)")
-        st.markdown(f"Query: *\"{st.session_state.search_query}\"*")
-        st.write("---")
-        
-        if st.session_state.results:
-            for idx, hit in enumerate(st.session_state.results):
-                source_name = hit["source"]
-                confidence = hit["confidence"]
-                snippet = hit["text"]
-                
-                # Check if this hit is currently selected
-                is_selected = (st.session_state.selected_document == source_name)
-                border_color = "rgba(66, 133, 244, 0.6)" if is_selected else "rgba(255, 255, 255, 0.08)"
-                bg_color = "rgba(66, 133, 244, 0.05)" if is_selected else "rgba(255, 255, 255, 0.03)"
-                
-                st.markdown(f"""
-                <div class="result-card" style="border-color: {border_color}; background-color: {bg_color};">
-                    <div class="result-header">
-                        <span>📄 <b>{source_name}</b></span>
-                        <span class="result-badge">Match: {confidence}%</span>
-                    </div>
-                </div>
-                """, unsafe_allow_html=True)
-                
-                # Render snippet and a preview button
-                st.markdown(f"<div style='margin-top: -12px; margin-bottom: 12px; font-size: 0.95rem; color:#ccc;'><i>{snippet}</i></div>", unsafe_allow_html=True)
-                
-                if st.button(f"🔍 Open Document Preview: {source_name}", key=f"preview_btn_{idx}", use_container_width=True):
-                    st.session_state.selected_document = source_name
-                    st.rerun()
-        else:
-            st.info("No matching results found. Try broadening your query or rebuild the index in the sidebar.")
-            
-    # --- Column 2: Document Viewer Detail Pane ---
-    with col_viewer:
-        st.markdown("### 📄 Document Viewer")
-        
-        if st.session_state.selected_document:
-            doc_name = st.session_state.selected_document
-            doc_path = os.path.join(FOLDER_PATH, doc_name)
-            
-            st.markdown(f"Showing beginning of: **{doc_name}**")
-            
-            if os.path.exists(doc_path):
-                try:
-                    with open(doc_path, "r", encoding="utf-8", errors="ignore") as f:
-                        # Read the beginning of the file (first 2500 characters)
-                        full_content = f.read(2500)
-                        
-                    # Calculate if it was truncated
-                    file_size = os.path.getsize(doc_path)
-                    is_truncated = file_size > len(full_content)
-                    
-                    # Highlight query words in the content and render as html
-                    highlighted_content = highlight_query_terms(full_content, st.session_state.search_query)
-                    
-                    # Display content inside scrollable styled card
-                    st.markdown(f"""
-                    <div class="viewer-container">
-                        <div class="viewer-content">{highlighted_content}</div>
-                    </div>
-                    """, unsafe_allow_html=True)
-                    
-                    if is_truncated:
-                        st.caption(f"⚠️ Displaying first 2,500 characters of {file_size} bytes. Original source file resides in `./source_docs/{doc_name}`.")
-                    else:
-                        st.caption(f"✅ Displaying full file ({file_size} bytes).")
-                except Exception as e:
-                    st.error(f"Failed to read file: {e}")
-            else:
-                st.error(f"File '{doc_name}' not found at path '{doc_path}'.")
-        else:
-            # Welcome/Empty Detail State
-            st.markdown("""
-            <div class="viewer-placeholder">
-                <img src="https://img.icons8.com/pastel-glyph/64/document.png" style="opacity: 0.2; margin-bottom: 1rem;"/>
-                <p>Click "Open Document Preview" on any result to inspect the document structure and content here.</p>
-            </div>
-            """, unsafe_allow_html=True)
-else:
-    # Initial state (if user hasn't typed anything yet)
-    # Check if database is empty to warn the user
-    if retriever.is_empty():
-        st.warning(
-            "⚠️ The database is currently empty. "
-            "Please click **'Rebuild Database Index'** in the sidebar to scan and index the documents."
-        )
-    else:
-        st.info("💡 Type a query and click 'Search' to view results.")
+@app.route('/rebuild', methods=['POST'])
+def rebuild():
+    _, message = rebuild_index()
+    flash(message)
+    return redirect(url_for('index'))
+
+
+@app.route('/file/<path:filename>')
+def serve_file(filename):
+    as_attachment = request.args.get('download') == '1'
+    return send_from_directory(FOLDER_PATH, filename, as_attachment=as_attachment)
+
+
+if __name__ == '__main__':
+    app.run(debug=True)

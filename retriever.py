@@ -110,19 +110,22 @@ class LocalBilingualRetriever:
         self.bm25 = None
         self.indexed_chunks = []
         self.indexed_metadatas = []
-        print("🧹 Local database collection cleared successfully.")
+        print("Local database collection cleared successfully.")
 
-    def chunk_and_add_document(self, text: str, source_name: str, chunk_size: int = 50, overlap: int = 10):
+    def chunk_and_add_document(self, text: str, source_name: str, chunk_size: int = 50, overlap: int = 10, extra_metadata: dict = None):
         """Splits a document into overlapping word-level chunks and saves them in ChromaDB."""
         words = text.split()
         chunks = []
         metadatas = []
-        
+
         for i in range(0, len(words), chunk_size - overlap):
             chunk_words = words[i : i + chunk_size]
             chunk_text = " ".join(chunk_words)
             chunks.append(chunk_text)
-            metadatas.append({"source_document": source_name})
+            metadata = {"source_document": source_name}
+            if extra_metadata:
+                metadata.update(extra_metadata)
+            metadatas.append(metadata)
             
             if i + chunk_size >= len(words):
                 break
@@ -136,7 +139,7 @@ class LocalBilingualRetriever:
             
             # Rebuild keyword index to include new chunks
             self._rebuild_keyword_index()
-            print(f"📥 Indexed and saved '{source_name}' ({len(chunks)} chunks).")
+            print(f"Indexed and saved '{source_name}' ({len(chunks)} chunks).")
 
     # =========================================================================
     # MODULAR RETRIEVAL PIPELINE STAGES

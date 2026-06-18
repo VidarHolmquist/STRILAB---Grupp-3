@@ -16,12 +16,12 @@ To run locally on a standard CPU without external API dependencies:
 
 ##  Project Structure
 
-* **`app.py`**: Streamlit-based UI to search, preview, and review documents.
+* **`app.py`**: Flask-based UI to search, preview, and review documents.
 * **`retriever.py`**: Modular hybrid search implementation (E5 Dense Search + BM25 Sparse Search + RRF Fusion).
 * **`metrics/`**: Evaluation suite.
   * `evaluate_rag.py`: Evaluates retrieval metrics (Hit Rate, MRR, Recall, NDCG, MAP).
   * `evaluate_generation.py`: Simulated metrics for RAG faithfulness and constraint adherence (generation not implemented yet)
-* **`source_docs/`**: Directory containing target **`.txt`** documents to index.
+* **`source_docs/`**: Directory containing target documents to index — **`.txt`** and **`.pdf`** are supported. `.pdf` text is extracted with `pypdf`, and `.pdf` previews render via a vendored copy of Mozilla's pdf.js viewer (`static/vendor/pdfjs/`) so search-and-highlight works consistently in every browser.
 * **`rag_test_cases.json`**: Ground-truth dataset containing Swedish, English, and cross-lingual test queries.
 
 ---
@@ -50,11 +50,15 @@ To run locally on a standard CPU without external API dependencies:
      chmod +x start.sh
      ./start.sh
      ```
-   *(This automatically sets up a `.venv` virtual environment, installs all required dependencies, and launches the Streamlit search UI).*
+   *(This automatically sets up a `.venv` virtual environment, installs all required dependencies, and launches the Flask search UI at `http://localhost:5000`).*
 3. **Index documents:**
-   * Populate the `source_docs/` folder with text documents (Note: files must be in `.txt` format. Do not delete `.gitkeep`, as it is ignored by the engine but keeps the empty folder structure tracked in Git).
-   * *Tip: If the folder contains no `.txt` files, the application will automatically generate sample documents for testing.*
-   * Open the Streamlit admin panel sidebar and click **Rebuild Database Index** to generate the vector and keyword database collections.
+   * Populate the `source_docs/` folder with documents in `.txt` or `.pdf` format (do not delete `.gitkeep`, as it is ignored by the engine but keeps the empty folder structure tracked in Git).
+   * *Tip: If the folder contains no documents, the application will automatically generate sample `.txt` documents for testing.*
+   * On the search page, click **Rebuild Database Index** to generate the vector and keyword database collections.
+   * Click any search result to preview it in the pane on the right and jump straight to the matching passage:
+     * `.pdf` previews render through the vendored pdf.js viewer and use its built-in search to scroll to and highlight the match — this works the same in every browser.
+     * `.txt` previews use the browser's native [Text Fragments](https://developer.mozilla.org/en-US/docs/Web/URI/Reference/Fragment/Text_fragments) (`#:~:text=`) to scroll to and highlight the match — supported in Chrome/Edge, not in Firefox/Safari (the file still opens fine there, just without the auto-scroll).
+   * **Ladda ned** downloads the original file.
 
 ### Running Evaluations
 * **To evaluate retrieval performance:**
