@@ -16,12 +16,13 @@ To run locally on a standard CPU without external API dependencies:
 
 ##  Project Structure
 
-* **`app.py`**: Flask-based UI to search, preview, and review documents.
-* **`retriever.py`**: Modular hybrid search implementation (E5 Dense Search + BM25 Sparse Search + RRF Fusion).
+* **`frontend/app.py`**: Flask-based UI to search, preview, and review documents.
+* **`frontend/templates/`** and **`frontend/static/`**: HTML templates and static assets for the Flask UI.
+* **`backend/retriever.py`**: Modular hybrid search implementation (E5 Dense Search + BM25 Sparse Search + RRF Fusion).
 * **`metrics/`**: Evaluation suite.
   * `evaluate_rag.py`: Evaluates retrieval metrics (Hit Rate, MRR, Recall, NDCG, MAP).
   * `evaluate_generation.py`: Simulated metrics for RAG faithfulness and constraint adherence (generation not implemented yet)
-* **`source_docs/`**: Directory containing target documents to index — **`.txt`** and **`.pdf`** are supported. `.pdf` text is extracted with `pypdf`, and `.pdf` previews render via a vendored copy of Mozilla's pdf.js viewer (`static/vendor/pdfjs/`) so search-and-highlight works consistently in every browser.
+* **`source_docs/`**: Directory containing target documents to index — **`.txt`** and **`.pdf`** are supported. `.pdf` text is extracted with `pypdf`, and `.pdf` previews render via a vendored copy of Mozilla's pdf.js viewer (`frontend/static/vendor/pdfjs/`) so search-and-highlight works consistently in every browser.
 * **`rag_test_cases.json`**: Ground-truth dataset containing Swedish, English, and cross-lingual test queries.
 
 ---

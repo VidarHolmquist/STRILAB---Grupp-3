@@ -36,4 +36,4 @@ echo "✅ All dependencies verified/installed."
 
 echo
 echo "🚀 Launching Flask Search UI..."
-python3 app.py
+python3 frontend/app.py

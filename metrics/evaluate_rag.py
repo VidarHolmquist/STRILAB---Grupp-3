@@ -10,7 +10,7 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.abspath(os.path.join(SCRIPT_DIR, ".."))
 sys.path.append(PROJECT_ROOT)
 
-from retriever import LocalBilingualRetriever
+from backend.retriever import LocalBilingualRetriever
 
 SOURCE_DOCS_DIR = os.path.join(PROJECT_ROOT, "source_docs")
 TEST_CASES_FILE = os.path.join(PROJECT_ROOT, "rag_test_cases.json")

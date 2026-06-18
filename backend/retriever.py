@@ -62,8 +62,11 @@ class LocalBilingualRetriever:
     and sparse keyword search (BM25) with Reciprocal Rank Fusion (RRF).
     Supports English and Swedish natively.
     """
-    def __init__(self, db_path="./local_chroma_db", collection_name="bilingual_rag"):
+    def __init__(self, db_path=None, collection_name="bilingual_rag"):
         """Initializes database, embedding function, and registers runtime state."""
+        if db_path is None:
+            project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            db_path = os.path.join(project_root, "local_chroma_db")
         self.client = chromadb.PersistentClient(path=db_path)
         
         # Load local bilingual E5 embedding function

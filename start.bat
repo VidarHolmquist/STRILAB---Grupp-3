@@ -46,6 +46,6 @@ echo ✅ All dependencies verified/installed.
 
 echo.
 echo 🚀 Launching Flask Search UI...
-python app.py
+python frontend\app.py
 
 pause

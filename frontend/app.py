@@ -2,10 +2,14 @@ import os
 import re
 import html
 import mimetypes
+import sys
 from pypdf import PdfReader
 from flask import Flask, render_template, request, redirect, url_for, flash, send_from_directory
 
-from retriever import LocalBilingualRetriever
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.append(PROJECT_ROOT)
+
+from backend.retriever import LocalBilingualRetriever
 
 mimetypes.add_type('text/javascript', '.mjs')
 mimetypes.add_type('application/wasm', '.wasm')
@@ -13,7 +17,7 @@ mimetypes.add_type('application/wasm', '.wasm')
 app = Flask(__name__)
 app.secret_key = 'dev'
 
-FOLDER_PATH = "./source_docs"
+FOLDER_PATH = os.path.join(PROJECT_ROOT, "source_docs")
 
 retriever = LocalBilingualRetriever()
 
